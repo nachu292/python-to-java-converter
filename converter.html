@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python to Java Converter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .converter-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            min-height: 600px;
+        }
+
+        .input-section,
+        .output-section {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .section-header {
+            padding: 20px;
+            font-weight: bold;
+            font-size: 1.2em;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .input-section .section-header {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+        }
+
+        .output-section .section-header {
+            background: linear-gradient(135deg, #27ae60, #229954);
+            color: white;
+        }
+
+        .code-area {
+            flex: 1;
+            border: none;
+            padding: 25px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            resize: none;
+            outline: none;
+            background: #f8f9fa;
+            color: #2c3e50;
+        }
+
+        .code-area:focus {
+            background: #fff;
+        }
+
+        .output-area {
+            flex: 1;
+            padding: 25px;
+            background: #f8f9fa;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            overflow-y: auto;
+            color: #2c3e50;
+        }
+
+        .controls {
+            padding: 30px;
+            background: #ecf0f1;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-convert {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            box-shadow: 0 4px 15px rgba(52, 152, 219, 0.4);
+        }
+
+        .btn-convert:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(52, 152, 219, 0.6);
+        }
+
+        .btn-clear {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+            box-shadow: 0 4px 15px rgba(149, 165, 166, 0.4);
+        }
+
+        .btn-clear:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(149, 165, 166, 0.6);
+        }
+
+        .btn-copy {
+            background: linear-gradient(135deg, #27ae60, #229954);
+            color: white;
+            box-shadow: 0 4px 15px rgba(39, 174, 96, 0.4);
+        }
+
+        .btn-copy:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(39, 174, 96, 0.6);
+        }
+
+        .examples {
+            padding: 30px;
+            background: #fff;
+        }
+
+        .examples h3 {
+            margin-bottom: 20px;
+            color: #2c3e50;
+            text-align: center;
+            font-size: 1.3em;
+        }
+
+        .example-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .example {
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #3498db;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .example:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .example h4 {
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        .example code {
+            display: block;
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        @media (max-width: 768px) {
+            .converter-container {
+                grid-template-columns: 1fr;
+            }
+
+            .controls {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            background: #27ae60;
+            color: white;
+            border-radius: 5px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 1000;
+        }
+
+        .notification.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🐍 ➡️ ☕ Python to Java Converter</h1>
+            <p>Transform your Python code into Java with intelligent syntax conversion</p>
+        </div>
+
+        <div class="converter-container">
+            <div class="input-section">
+                <div class="section-header">Python Code Input</div>
+                <textarea class="code-area" id="pythonInput" placeholder="Enter your Python code here...
+
+# Example:
+def greet(name):
+    print(f'Hello, {name}!')
+    
+greet('World')"></textarea>
+            </div>
+
+            <div class="output-section">
+                <div class="section-header">Java Code Output</div>
+                <div class="output-area" id="javaOutput">Converted Java code will appear here...</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-convert" onclick="convertCode()">🚀 Convert</button>
+            <button class="btn btn-clear" onclick="clearAll()">🗑️ Clear All</button>
+            <button class="btn btn-copy" onclick="copyOutput()">📋 Copy Java Code</button>
+        </div>
+
+        <div class="examples">
+            <h3>Quick Examples - Click to Try</h3>
+            <div class="example-grid">
+                <div class="example" onclick="loadExample(0)">
+                    <h4>Basic Function</h4>
+                    <code>def add(a, b):
+    return a + b</code>
+                </div>
+                <div class="example" onclick="loadExample(1)">
+                    <h4>Class Definition</h4>
+                    <code>class Person:
+    def __init__(self, name):
+        self.name = name</code>
+                </div>
+                <div class="example" onclick="loadExample(2)">
+                    <h4>List Operations</h4>
+                    <code>numbers = [1, 2, 3, 4, 5]
+for num in numbers:
+    print(num * 2)</code>
+                </div>
+                <div class="example" onclick="loadExample(3)">
+                    <h4>Conditional Logic</h4>
+                    <code>if age >= 18:
+    print("Adult")
+else:
+    print("Minor")</code>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="notification" id="notification"></div>
+
+    <script>
+        const examples = [
+            `def add(a, b):
+    return a + b
+
+result = add(5, 3)
+print(result)`,
+            `class Person:
+    def __init__(self, name, age):
+        self.name = name
+        self.age = age
+    
+    def introduce(self):
+        print(f"Hi, I'm {self.name} and I'm {self.age} years old")
+
+person = Person("Alice", 30)
+person.introduce()`,
+            `numbers = [1, 2, 3, 4, 5]
+squared = []
+
+for num in numbers:
+    squared.append(num * num)
+    print(f"Square of {num} is {num * num}")
+
+print(squared)`,
+            `def check_grade(score):
+    if score >= 90:
+        return "A"
+    elif score >= 80:
+        return "B"
+    elif score >= 70:
+        return "C"
+    else:
+        return "F"
+
+grade = check_grade(85)
+print(f"Your grade is: {grade}")`
+        ];
+
+        function loadExample(index) {
+            document.getElementById('pythonInput').value = examples[index];
+            convertCode();
+        }
+
+        function convertCode() {
+            const pythonCode = document.getElementById('pythonInput').value;
+            if (!pythonCode.trim()) {
+                showNotification('Please enter some Python code first!', 'error');
+                return;
+            }
+
+            try {
+                const javaCode = pythonToJava(pythonCode);
+                document.getElementById('javaOutput').textContent = javaCode;
+                showNotification('Code converted successfully!', 'success');
+            } catch (error) {
+                document.getElementById('javaOutput').textContent = 'Error converting code: ' + error.message;
+                showNotification('Conversion error occurred', 'error');
+            }
+        }
+
+        function pythonToJava(pythonCode) {
+            let javaCode = pythonCode;
+            let hasMain = false;
+            let imports = new Set();
+            let classNeeded = false;
+
+            // Check if we need Scanner for input
+            if (javaCode.includes('input(')) {
+                imports.add('import java.util.Scanner;');
+            }
+
+            // Check if we need ArrayList
+            if (javaCode.includes('.append(') || javaCode.includes('[]')) {
+                imports.add('import java.util.ArrayList;');
+                imports.add('import java.util.List;');
+            }
+
+            // Convert print statements
+            javaCode = javaCode.replace(/print\(f?['"]([^'"]*)\{([^}]+)\}([^'"]*)['"]\)/g, 'System.out.println("$1" + $2 + "$3")');
+            javaCode = javaCode.replace(/print\(f['"]([^'"]*)['"]\)/g, 'System.out.println("$1")');
+            javaCode = javaCode.replace(/print\(([^)]+)\)/g, 'System.out.println($1)');
+
+            // Convert input
+            javaCode = javaCode.replace(/(\w+)\s*=\s*input\(['"]([^'"]*)['"]\)/g, 'System.out.print("$2"); String $1 = scanner.nextLine()');
+            javaCode = javaCode.replace(/(\w+)\s*=\s*int\(input\(['"]([^'"]*)['"]\)\)/g, 'System.out.print("$2"); int $1 = scanner.nextInt()');
+
+            // Convert function definitions
+            javaCode = javaCode.replace(/def\s+(\w+)\(([^)]*)\):/g, (match, funcName, params) => {
+                if (funcName === '__init__') {
+                    return `public ${getCurrentClassName()}(${convertParams(params)}) {`;
+                }
+                const returnType = inferReturnType(pythonCode, funcName);
+                return `public static ${returnType} ${funcName}(${convertParams(params)}) {`;
+            });
+
+            // Convert class definitions
+            javaCode = javaCode.replace(/class\s+(\w+):/g, (match, className) => {
+                classNeeded = true;
+                return `public class ${className} {`;
+            });
+
+            // Convert self references
+            javaCode = javaCode.replace(/self\.(\w+)/g, 'this.$1');
+            javaCode = javaCode.replace(/self,?\s*/g, '');
+
+            // Convert list operations
+            javaCode = javaCode.replace(/(\w+)\s*=\s*\[\]/g, 'List<Integer> $1 = new ArrayList<>()');
+            javaCode = javaCode.replace(/(\w+)\s*=\s*\[([^\]]+)\]/g, 'List<Integer> $1 = Arrays.asList($2)');
+            javaCode = javaCode.replace(/(\w+)\.append\(([^)]+)\)/g, '$1.add($2)');
+
+            // Convert for loops
+            javaCode = javaCode.replace(/for\s+(\w+)\s+in\s+(\w+):/g, 'for (int $1 : $2) {');
+            javaCode = javaCode.replace(/for\s+(\w+)\s+in\s+range\((\d+)\):/g, 'for (int $1 = 0; $1 < $2; $1++) {');
+            javaCode = javaCode.replace(/for\s+(\w+)\s+in\s+range\((\w+),\s*(\w+)\):/g, 'for (int $1 = $2; $1 < $3; $1++) {');
+
+            // Convert if/elif/else
+            javaCode = javaCode.replace(/elif\s+([^:]+):/g, '} else if ($1) {');
+            javaCode = javaCode.replace(/if\s+([^:]+):/g, 'if ($1) {');
+            javaCode = javaCode.replace(/else:/g, '} else {');
+
+            // Convert return statements
+            javaCode = javaCode.replace(/return\s+/g, 'return ');
+
+            // Convert variable assignments with type inference
+            javaCode = javaCode.replace(/(\w+)\s*=\s*"([^"]*)"/g, 'String $1 = "$2"');
+            javaCode = javaCode.replace(/(\w+)\s*=\s*(\d+\.\d+)/g, 'double $1 = $2');
+            javaCode = javaCode.replace(/(\w+)\s*=\s*(\d+)/g, 'int $1 = $2');
+            javaCode = javaCode.replace(/(\w+)\s*=\s*(True|False)/g, 'boolean $1 = $2.toLowerCase()');
+
+            // Fix indentation and add braces
+            const lines = javaCode.split('\n');
+            const result = [];
+            let indentLevel = 0;
+            let inClass = false;
+
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i];
+                const trimmed = line.trim();
+
+                if (!trimmed) {
+                    result.push('');
+                    continue;
+                }
+
+                // Adjust indentation
+                if (trimmed.includes('{')) {
+                    result.push('    '.repeat(indentLevel) + trimmed);
+                    indentLevel++;
+                    if (trimmed.includes('class ')) {
+                        inClass = true;
+                    }
+                } else if (trimmed === '}') {
+                    indentLevel = Math.max(0, indentLevel - 1);
+                    result.push('    '.repeat(indentLevel) + trimmed);
+                } else {
+                    result.push('    '.repeat(indentLevel) + trimmed);
+                }
+            }
+
+            // Add missing closing braces
+            while (indentLevel > 0) {
+                indentLevel--;
+                result.push('    '.repeat(indentLevel) + '}');
+            }
+
+            // Wrap in main method if needed
+            let finalCode = result.join('\n');
+
+            if (!inClass && !finalCode.includes('public class')) {
+                hasMain = true;
+                const mainContent = finalCode.split('\n').map(line => '        ' + line).join('\n');
+                finalCode = `public class Main {
+    public static void main(String[] args) {
+${imports.has('import java.util.Scanner;') ? '        Scanner scanner = new Scanner(System.in);' : ''}
+${mainContent}
+${imports.has('import java.util.Scanner;') ? '        scanner.close();' : ''}
+    }
+}`;
+            }
+
+            // Add imports at the beginning
+            if (imports.size > 0) {
+                finalCode = Array.from(imports).join('\n') + '\n\n' + finalCode;
+            }
+
+            return finalCode;
+        }
+
+        function convertParams(params) {
+            if (!params.trim()) return '';
+
+            return params.split(',').map(param => {
+                const trimmed = param.trim();
+                if (trimmed === 'self') return '';
+                // Simple type inference - in real converter, this would be more sophisticated
+                return `Object ${trimmed}`;
+            }).filter(p => p).join(', ');
+        }
+
+        function inferReturnType(code, funcName) {
+            // Simple return type inference
+            const funcRegex = new RegExp(`def\\s+${funcName}[\\s\\S]*?(?=def|class|$)`, 'i');
+            const funcCode = code.match(funcRegex);
+
+            if (funcCode && funcCode[0].includes('return ')) {
+                if (funcCode[0].includes('return "') || funcCode[0].includes("return '")) {
+                    return 'String';
+                }
+                if (funcCode[0].includes('return \\d+\\.\\d+')) {
+                    return 'double';
+                }
+                if (funcCode[0].includes('return \\d+')) {
+                    return 'int';
+                }
+                return 'Object';
+            }
+            return 'void';
+        }
+
+        function getCurrentClassName() {
+            // This is a simplified approach - would need more context in real implementation
+            return 'MyClass';
+        }
+
+        function clearAll() {
+            document.getElementById('pythonInput').value = '';
+            document.getElementById('javaOutput').textContent = 'Converted Java code will appear here...';
+            showNotification('Cleared all content', 'info');
+        }
+
+        function copyOutput() {
+            const output = document.getElementById('javaOutput').textContent;
+            if (output === 'Converted Java code will appear here...') {
+                showNotification('No code to copy! Convert some Python code first.', 'error');
+                return;
+            }
+
+            navigator.clipboard.writeText(output).then(() => {
+                showNotification('Java code copied to clipboard!', 'success');
+            }).catch(() => {
+                showNotification('Failed to copy code', 'error');
+            });
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = 'notification show';
+
+            if (type === 'error') {
+                notification.style.background = '#e74c3c';
+            } else if (type === 'success') {
+                notification.style.background = '#27ae60';
+            } else {
+                notification.style.background = '#3498db';
+            }
+
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // Auto-convert on input (with debounce)
+        let timeout;
+        document.getElementById('pythonInput').addEventListener('input', () => {
+            clearTimeout(timeout);
+            timeout = setTimeout(convertCode, 1000);
+        });
+    </script>
+</body>
+
+</html>
