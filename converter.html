@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -54,8 +53,7 @@
             min-height: 600px;
         }
 
-        .input-section,
-        .output-section {
+        .input-section, .output-section {
             display: flex;
             flex-direction: column;
         }
@@ -213,7 +211,7 @@
             .converter-container {
                 grid-template-columns: 1fr;
             }
-
+            
             .controls {
                 flex-direction: column;
                 align-items: center;
@@ -238,7 +236,6 @@
         }
     </style>
 </head>
-
 <body>
     <div class="container">
         <div class="header">
@@ -324,8 +321,8 @@ person.introduce()`,
 squared = []
 
 for num in numbers:
-    squared.append(num * num)
-    print(f"Square of {num} is {num * num}")
+    squared.append(num ** 2)
+    print(f"Square of {num} is {num ** 2}")
 
 print(squared)`,
             `def check_grade(score):
@@ -342,6 +339,1048 @@ grade = check_grade(85)
 print(f"Your grade is: {grade}")`
         ];
 
+        class PythonToJavaConverter {
+            constructor() {
+                this.variables = new Map();
+                this.functions = new Map();
+                this.classes = new Map();
+                this.imports = new Set();
+                this.currentClass = null;
+                this.indentLevel = 0;
+                this.hasScanner = false;
+            }
+
+            convert(pythonCode) {
+                this.reset();
+                
+                // Validate Python syntax first
+                const validationResult = this.validatePythonCode(pythonCode);
+                if (!validationResult.isValid) {
+                    throw new Error(validationResult.error);
+                }
+                
+                const lines = pythonCode.split('\n');
+                
+                // First pass: analyze code structure
+                this.analyzeCode(lines);
+                
+                // Second pass: convert line by line with proper structure tracking
+                const result = this.convertWithProperStructure(lines);
+                
+                return result;
+            }
+
+            convertWithProperStructure(lines) {
+                const javaCode = [];
+                let braceStack = [];
+                let currentIndent = 0;
+                
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    const trimmed = line.trim();
+                    const lineIndent = this.getIndentLevel(line);
+                    
+                    if (!trimmed || trimmed.startsWith('#')) {
+                        if (trimmed.startsWith('#')) {
+                            javaCode.push('    '.repeat(currentIndent) + '//' + trimmed.substring(1));
+                        }
+                        continue;
+                    }
+                    
+                    // Handle indentation changes - close braces as needed
+                    while (currentIndent > lineIndent && braceStack.length > 0) {
+                        currentIndent--;
+                        javaCode.push('    '.repeat(currentIndent) + '}');
+                        braceStack.pop();
+                    }
+                    
+                    currentIndent = lineIndent;
+                    
+                    // Convert the line
+                    const convertedLine = this.convertSingleLine(trimmed, currentIndent, lines, i);
+                    
+                    if (convertedLine) {
+                        javaCode.push('    '.repeat(currentIndent) + convertedLine);
+                        
+                        // Track if this line opens a block
+                        if (convertedLine.includes('{')) {
+                            braceStack.push('block');
+                            currentIndent++;
+                        }
+                    }
+                }
+                
+                // Close any remaining open braces
+                while (braceStack.length > 0) {
+                    currentIndent--;
+                    javaCode.push('    '.repeat(currentIndent) + '}');
+                    braceStack.pop();
+                }
+                
+                return this.wrapInProperJavaStructure(javaCode);
+            }
+
+            convertSingleLine(line, indent, allLines, lineIndex) {
+                // Function definitions
+                if (line.startsWith('def ')) {
+                    return this.convertFunctionDef(line);
+                }
+                
+                // Class definitions
+                if (line.startsWith('class ')) {
+                    return this.convertClassDef(line);
+                }
+                
+                // Print statements
+                if (line.startsWith('print(')) {
+                    return this.convertPrintStatement(line);
+                }
+                
+                // Variable assignments
+                if (this.isVariableAssignment(line)) {
+                    return this.convertVariableAssignment(line);
+                }
+                
+                // Control structures
+                if (line.startsWith('if ') || line.startsWith('elif ') || line === 'else:') {
+                    return this.convertIfStatement(line);
+                }
+                
+                // Loops
+                if (line.startsWith('for ')) {
+                    return this.convertForLoop(line);
+                }
+                
+                if (line.startsWith('while ')) {
+                    return this.convertWhileLoop(line);
+                }
+                
+                // Return statements
+                if (line.startsWith('return')) {
+                    return this.convertReturnStatement(line);
+                }
+                
+                // Method calls and expressions
+                return this.convertExpression(line);
+            }
+
+            convertFunctionDef(line) {
+                const match = line.match(/^def\s+(\w+)\s*\(([^)]*)\):/);
+                if (!match) return null;
+                
+                const [, funcName, params] = match;
+                
+                if (funcName === '__init__') {
+                    const javaParams = this.convertParameterList(params, true);
+                    return `public ${this.currentClass}(${javaParams}) {`;
+                }
+                
+                const funcInfo = this.functions.get(funcName);
+                const returnType = funcInfo ? funcInfo.returnType : 'void';
+                const javaParams = this.convertParameterList(params);
+                const modifier = this.currentClass ? 'public' : 'public static';
+                
+                return `${modifier} ${returnType} ${funcName}(${javaParams}) {`;
+            }
+
+            convertClassDef(line) {
+                const match = line.match(/^class\s+(\w+)(?:\([^)]*\))?:/);
+                if (!match) return null;
+                
+                this.currentClass = match[1];
+                return `public class ${match[1]} {`;
+            }
+
+            convertPrintStatement(line) {
+                // Handle f-strings: f"Hello {name}"
+                if (line.includes('f"') || line.includes("f'")) {
+                    return this.convertFString(line);
+                }
+                
+                // Regular print statements
+                const match = line.match(/^print\((.+)\)$/);
+                if (match) {
+                    let content = match[1];
+                    
+                    // Convert single quotes to double quotes for strings
+                    content = content.replace(/'/g, '"');
+                    
+                    return `System.out.println(${content});`;
+                }
+                
+                return 'System.out.println();';
+            }
+
+            convertFString(line) {
+                let result = line;
+                
+                // Extract the f-string content
+                const fStringMatch = result.match(/print\(f["']([^"']*?)["']\)/);
+                if (fStringMatch) {
+                    let content = fStringMatch[1];
+                    
+                    // Convert {variable} to " + variable + "
+                    content = content.replace(/\{([^}]+)\}/g, '" + $1 + "');
+                    
+                    // Clean up extra concatenations
+                    content = content.replace(/^" \+ /, '');
+                    content = content.replace(/ \+ "$/, '');
+                    content = content.replace(/ \+ "" \+ /g, ' + ');
+                    
+                    // If no variables, just return the string
+                    if (!content.includes(' + ')) {
+                        content = '"' + content + '"';
+                    } else {
+                        // Ensure proper string formatting
+                        if (!content.startsWith('"')) {
+                            content = '"' + content;
+                        }
+                        if (!content.endsWith('"') && !content.endsWith(' + ')) {
+                            content = content + '"';
+                        }
+                    }
+                    
+                    return `System.out.println(${content});`;
+                }
+                
+                return 'System.out.println();';
+            }
+
+            convertVariableAssignment(line) {
+                const match = line.match(/^(\w+)\s*=\s*(.+)$/);
+                if (!match) return null;
+                
+                const [, varName, value] = match;
+                const javaValue = this.convertPythonValue(value);
+                const javaType = this.inferJavaType(value);
+                
+                // Check if variable already declared
+                if (this.variables.has(varName)) {
+                    return `${varName} = ${javaValue};`;
+                } else {
+                    this.variables.set(varName, javaType);
+                    return `${javaType} ${varName} = ${javaValue};`;
+                }
+            }
+
+            convertIfStatement(line) {
+                if (line === 'else:') {
+                    return '} else {';
+                }
+                
+                if (line.startsWith('elif ')) {
+                    const condition = line.substring(5, line.length - 1);
+                    return `} else if (${this.convertPythonCondition(condition)}) {`;
+                }
+                
+                if (line.startsWith('if ')) {
+                    const condition = line.substring(3, line.length - 1);
+                    return `if (${this.convertPythonCondition(condition)}) {`;
+                }
+                
+                return null;
+            }
+
+            convertForLoop(line) {
+                // for item in collection
+                const iterMatch = line.match(/^for\s+(\w+)\s+in\s+(\w+):/);
+                if (iterMatch) {
+                    const [, item, collection] = iterMatch;
+                    return `for (Object ${item} : ${collection}) {`;
+                }
+                
+                // for i in range(n)
+                const rangeMatch = line.match(/^for\s+(\w+)\s+in\s+range\((\d+)\):/);
+                if (rangeMatch) {
+                    const [, variable, limit] = rangeMatch;
+                    return `for (int ${variable} = 0; ${variable} < ${limit}; ${variable}++) {`;
+                }
+                
+                // for i in range(start, end)
+                const rangeMatch2 = line.match(/^for\s+(\w+)\s+in\s+range\((\d+),\s*(\d+)\):/);
+                if (rangeMatch2) {
+                    const [, variable, start, end] = rangeMatch2;
+                    return `for (int ${variable} = ${start}; ${variable} < ${end}; ${variable}++) {`;
+                }
+                
+                return null;
+            }
+
+            convertWhileLoop(line) {
+                const condition = line.substring(6, line.length - 1);
+                return `while (${this.convertPythonCondition(condition)}) {`;
+            }
+
+            convertReturnStatement(line) {
+                if (line === 'return') {
+                    return 'return;';
+                }
+                
+                const value = line.substring(6).trim();
+                return `return ${this.convertPythonValue(value)};`;
+            }
+
+            convertExpression(line) {
+                // Function calls
+                if (line.includes('(') && line.includes(')') && !line.includes('=')) {
+                    return line + ';';
+                }
+                
+                // List operations
+                if (line.includes('.append(')) {
+                    return line.replace(/(\w+)\.append\(([^)]+)\)/, '$1.add($2)') + ';';
+                }
+                
+                // Other expressions
+                return line + ';';
+            }
+
+            convertParameterList(params, isConstructor = false) {
+                if (!params.trim()) return '';
+                
+                return params.split(',').map(param => {
+                    const trimmed = param.trim();
+                    if (trimmed === 'self') return null;
+                    return `String ${trimmed}`;
+                }).filter(p => p).join(', ');
+            }
+
+            convertPythonValue(value) {
+                // Handle lists
+                if (value.startsWith('[') && value.endsWith(']')) {
+                    if (value === '[]') {
+                        this.imports.add('import java.util.ArrayList;');
+                        return 'new ArrayList<>()';
+                    } else {
+                        this.imports.add('import java.util.Arrays;');
+                        const content = value.substring(1, value.length - 1);
+                        return `Arrays.asList(${content})`;
+                    }
+                }
+                
+                // Handle strings
+                if (value.startsWith("'") && value.endsWith("'")) {
+                    return value.replace(/'/g, '"');
+                }
+                
+                // Handle booleans
+                if (value === 'True') return 'true';
+                if (value === 'False') return 'false';
+                if (value === 'None') return 'null';
+                
+                // Handle function calls
+                if (value.includes('(') && value.includes(')')) {
+                    return value;
+                }
+                
+                return value;
+            }
+
+            convertPythonCondition(condition) {
+                let result = condition;
+                
+                // Convert logical operators
+                result = result.replace(/\band\b/g, '&&');
+                result = result.replace(/\bor\b/g, '||');
+                result = result.replace(/\bnot\b/g, '!');
+                
+                // Convert equality operators
+                result = result.replace(/\bis\b/g, '==');
+                result = result.replace(/\bis not\b/g, '!=');
+                
+                return result;
+            }
+
+            inferJavaType(value) {
+                if (value.startsWith('"') || value.startsWith("'")) {
+                    return 'String';
+                }
+                
+                if (value === 'True' || value === 'False') {
+                    return 'boolean';
+                }
+                
+                if (/^\d+$/.test(value)) {
+                    return 'int';
+                }
+                
+                if (/^\d+\.\d+$/.test(value)) {
+                    return 'double';
+                }
+                
+                if (value.startsWith('[')) {
+                    this.imports.add('import java.util.List;');
+                    return 'List<Object>';
+                }
+                
+                return 'Object';
+            }
+
+            isVariableAssignment(line) {
+                return /^\w+\s*=\s*[^=]/.test(line) && 
+                       !line.includes('==') && 
+                       !line.includes('!=') &&
+                       !line.includes('<=') &&
+                       !line.includes('>=');
+            }
+
+            getIndentLevel(line) {
+                const match = line.match(/^(\s*)/);
+                return match ? Math.floor(match[1].length / 4) : 0;
+            }
+
+            wrapInProperJavaStructure(javaLines) {
+                let result = '';
+                
+                // Add imports
+                if (this.imports.size > 0) {
+                    result += Array.from(this.imports).sort().join('\n') + '\n\n';
+                }
+                
+                const hasClass = javaLines.some(line => line.trim().startsWith('public class'));
+                
+                if (hasClass) {
+                    // Already has class structure
+                    result += javaLines.join('\n');
+                } else {
+                    // Wrap in Main class
+                    result += 'public class Main {\n';
+                    result += '    public static void main(String[] args) {\n';
+                    
+                    // Add all converted lines with proper indentation
+                    for (const line of javaLines) {
+                        if (line.trim()) {
+                            result += '        ' + line.trim() + '\n';
+                        }
+                    }
+                    
+                    result += '    }\n';
+                    result += '}';
+                }
+                
+                return result;
+            }
+
+            // ... (validation methods remain the same)
+
+            validatePythonCode(code) {
+                const lines = code.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#'));
+                
+                if (lines.length === 0) {
+                    return { isValid: false, error: "No Python code found. Please enter valid Python code." };
+                }
+
+                // Check for obvious non-Python patterns
+                const javaPatterns = [
+                    /public\s+class\s+\w+/,
+                    /public\s+static\s+void\s+main/,
+                    /System\.out\.println/,
+                    /private\s+\w+\s+\w+/,
+                    /import\s+java\./,
+                    /\w+\s+\w+\s*=\s*new\s+\w+/,
+                    /\/\*[\s\S]*?\*\//,
+                    /^\s*\/\//
+                ];
+
+                const cPatterns = [
+                    /#include\s*<.*>/,
+                    /int\s+main\s*\(/,
+                    /printf\s*\(/,
+                    /scanf\s*\(/,
+                    /malloc\s*\(/,
+                    /free\s*\(/
+                ];
+
+                const jsPatterns = [
+                    /function\s+\w+\s*\(/,
+                    /var\s+\w+\s*=/,
+                    /let\s+\w+\s*=/,
+                    /const\s+\w+\s*=/,
+                    /console\.log\s*\(/,
+                    /document\./,
+                    /window\./
+                ];
+
+                const htmlPatterns = [
+                    /<html>/i,
+                    /<\/html>/i,
+                    /<head>/i,
+                    /<body>/i,
+                    /<script>/i,
+                    /<style>/i,
+                    /<div[^>]*>/i
+                ];
+
+                // Check if it looks like other languages
+                for (const line of lines) {
+                    if (javaPatterns.some(pattern => pattern.test(line))) {
+                        return { isValid: false, error: "This appears to be Java code, not Python. Please enter Python code." };
+                    }
+                    if (cPatterns.some(pattern => pattern.test(line))) {
+                        return { isValid: false, error: "This appears to be C/C++ code, not Python. Please enter Python code." };
+                    }
+                    if (jsPatterns.some(pattern => pattern.test(line))) {
+                        return { isValid: false, error: "This appears to be JavaScript code, not Python. Please enter Python code." };
+                    }
+                    if (htmlPatterns.some(pattern => pattern.test(line))) {
+                        return { isValid: false, error: "This appears to be HTML code, not Python. Please enter Python code." };
+                    }
+                }
+
+                // Check for basic Python syntax patterns
+                let hasPythonSyntax = false;
+                const pythonIndicators = [
+                    /^def\s+\w+\s*\([^)]*\):/,                    // function definitions
+                    /^class\s+\w+.*:/,                           // class definitions
+                    /^if\s+.+:/,                                 // if statements
+                    /^elif\s+.+:/,                               // elif statements
+                    /^else:/,                                    // else statements
+                    /^for\s+\w+\s+in\s+.+:/,                    // for loops
+                    /^while\s+.+:/,                              // while loops
+                    /^try:/,                                     // try blocks
+                    /^except.*:/,                                // except blocks
+                    /^with\s+.+:/,                               // with statements
+                    /print\s*\(/,                                // print statements
+                    /import\s+\w+/,                              // import statements
+                    /from\s+\w+\s+import/,                       // from import statements
+                    /^\s*#/,                                     // comments
+                    /\w+\s*=\s*\[.*\]/,                         // list assignments
+                    /\w+\s*=\s*\{.*\}/,                         // dict assignments
+                    /\w+\s*=\s*\(.*\)/,                         // tuple assignments
+                    /\.append\s*\(/,                             // list methods
+                    /\.join\s*\(/,                               // string methods
+                    /len\s*\(/,                                  // len function
+                    /range\s*\(/,                                // range function
+                    /return\s+/,                                 // return statements
+                    /self\./,                                    // self references
+                    /^@\w+/,                                     // decorators
+                    /lambda\s+/,                                 // lambda expressions
+                    /f["'][^"']*\{[^}]+\}/                       // f-strings
+                ];
+
+                for (const line of lines) {
+                    if (pythonIndicators.some(pattern => pattern.test(line))) {
+                        hasPythonSyntax = true;
+                        break;
+                    }
+                }
+
+                // Check for Python-style variable assignments
+                if (!hasPythonSyntax) {
+                    for (const line of lines) {
+                        // Simple assignment without type declaration (Python style)
+                        if (/^\w+\s*=\s*[^=]/.test(line) && !line.includes('==') && !line.includes('!=')) {
+                            // Make sure it's not a Java-style declaration
+                            if (!/^\w+\s+\w+\s*=/.test(line)) {
+                                hasPythonSyntax = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!hasPythonSyntax) {
+                    return { 
+                        isValid: false, 
+                        error: "This doesn't appear to be valid Python code. Please check your syntax and try again.\n\nPython code should include elements like:\n• def function_name():\n• class ClassName:\n• if condition:\n• for item in list:\n• print()\n• Variable assignments without type declarations" 
+                    };
+                }
+
+                // Check for common Python syntax errors
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    
+                    // Check for missing colons
+                    if (/^(if|elif|else|for|while|def|class|try|except|finally|with)\b/.test(line) && !line.endsWith(':')) {
+                        return { 
+                            isValid: false, 
+                            error: `Line ${i + 1}: Missing colon (:) at end of statement: "${line}"\nPython requires colons after if, for, while, def, class, etc.` 
+                        };
+                    }
+
+                    // Check for obvious Java syntax in Python context
+                    if (line.includes(';') && !line.includes('#') && !line.includes('"') && !line.includes("'")) {
+                        return { 
+                            isValid: false, 
+                            error: `Line ${i + 1}: Semicolons (;) are not used in Python: "${line}"\nPython uses line breaks instead of semicolons.` 
+                        };
+                    }
+
+                    // Check for curly braces (common mistake from other languages)
+                    if ((line.includes('{') || line.includes('}')) && !line.includes('#') && !line.includes('"') && !line.includes("'")) {
+                        return { 
+                            isValid: false, 
+                            error: `Line ${i + 1}: Curly braces {} are not used for code blocks in Python: "${line}"\nPython uses indentation instead of braces.` 
+                        };
+                    }
+                }
+
+                return { isValid: true };
+            }
+
+            reset() {
+                this.variables.clear();
+                this.functions.clear();
+                this.classes.clear();
+                this.imports.clear();
+                this.currentClass = null;
+                this.indentLevel = 0;
+            }
+
+            analyzeCode(lines) {
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    
+                    // Detect function definitions
+                    const funcMatch = line.match(/^def\s+(\w+)\s*\(([^)]*)\):/);
+                    if (funcMatch) {
+                        const [, name, params] = funcMatch;
+                        this.functions.set(name, {
+                            params: this.parseParameters(params),
+                            returnType: this.inferReturnType(lines, i)
+                        });
+                    }
+                    
+                    // Detect class definitions
+                    const classMatch = line.match(/^class\s+(\w+)(?:\([^)]*\))?:/);
+                    if (classMatch) {
+                        this.classes.set(classMatch[1], { methods: [], fields: [] });
+                    }
+                    
+                    // Detect variable assignments
+                    const varMatch = line.match(/^(\w+)\s*=\s*(.+)$/);
+                    if (varMatch && !line.includes('def ') && !line.includes('class ')) {
+                        const [, name, value] = varMatch;
+                        this.variables.set(name, this.inferType(value.trim()));
+                    }
+                }
+            }
+
+            convertLine(line, lineIndex, allLines) {
+                const trimmed = line.trim();
+                const indent = this.getIndent(line);
+                
+                if (!trimmed || trimmed.startsWith('#')) {
+                    return trimmed.startsWith('#') ? '    '.repeat(indent) + '//' + trimmed.substring(1) : '';
+                }
+
+                // Function definitions
+                if (trimmed.startsWith('def ')) {
+                    return this.convertFunction(trimmed, indent);
+                }
+                
+                // Class definitions
+                if (trimmed.startsWith('class ')) {
+                    return this.convertClass(trimmed, indent);
+                }
+                
+                // Print statements
+                if (trimmed.startsWith('print(')) {
+                    return this.convertPrint(trimmed, indent);
+                }
+                
+                // Variable assignments
+                if (this.isAssignment(trimmed)) {
+                    return this.convertAssignment(trimmed, indent);
+                }
+                
+                // Control structures
+                if (trimmed.startsWith('if ') || trimmed.startsWith('elif ') || trimmed === 'else:') {
+                    return this.convertCondition(trimmed, indent);
+                }
+                
+                // Loops
+                if (trimmed.startsWith('for ')) {
+                    return this.convertForLoop(trimmed, indent);
+                }
+                
+                if (trimmed.startsWith('while ')) {
+                    return this.convertWhileLoop(trimmed, indent);
+                }
+                
+                // Return statements
+                if (trimmed.startsWith('return')) {
+                    return this.convertReturn(trimmed, indent);
+                }
+                
+                // Function calls and other statements
+                return this.convertStatement(trimmed, indent);
+            }
+
+            convertFunction(line, indent) {
+                const match = line.match(/^def\s+(\w+)\s*\(([^)]*)\):/);
+                if (!match) return line;
+                
+                const [, name, params] = match;
+                const funcInfo = this.functions.get(name);
+                
+                if (name === '__init__') {
+                    const javaParams = this.convertParameters(params, true);
+                    return '    '.repeat(indent) + `public ${this.currentClass || 'Main'}(${javaParams}) {`;
+                }
+                
+                const returnType = funcInfo ? funcInfo.returnType : 'String'; // Default to String instead of void
+                const javaParams = this.convertParameters(params);
+                const visibility = this.currentClass ? 'public' : 'public static';
+                
+                return '    '.repeat(indent) + `${visibility} ${returnType} ${name}(${javaParams}) {`;
+            }
+
+            convertClass(line, indent) {
+                const match = line.match(/^class\s+(\w+)(?:\([^)]*\))?:/);
+                if (!match) return line;
+                
+                const className = match[1];
+                this.currentClass = className;
+                return '    '.repeat(indent) + `public class ${className} {`;
+            }
+
+            convertPrint(line, indent) {
+                // Handle f-strings
+                const fStringMatch = line.match(/^print\(f["']([^"']*)\{([^}]+)\}([^"']*?)["']\)$/);
+                if (fStringMatch) {
+                    const [, before, expr, after] = fStringMatch;
+                    return '    '.repeat(indent) + `System.out.println("${before}" + ${expr} + "${after}");`;
+                }
+                
+                // Handle regular f-strings with multiple expressions
+                if (line.includes('f"') || line.includes("f'")) {
+                    let converted = line.replace(/print\(f["']/, 'System.out.println("');
+                    converted = converted.replace(/\{([^}]+)\}/g, '" + $1 + "');
+                    converted = converted.replace(/["']\)$/, '");');
+                    converted = converted.replace(/ \+ "" \+ /g, ' + ');
+                    converted = converted.replace(/^(\s*)/, '');
+                    return '    '.repeat(indent) + converted;
+                }
+                
+                // Handle regular print statements
+                const content = line.match(/^print\((.+)\)$/);
+                if (content) {
+                    return '    '.repeat(indent) + `System.out.println(${content[1]});`;
+                }
+                
+                return '    '.repeat(indent) + line.replace('print', 'System.out.println') + ';';
+            }
+
+            convertAssignment(line, indent) {
+                const match = line.match(/^(\w+)\s*=\s*(.+)$/);
+                if (!match) return line;
+                
+                const [, varName, value] = match;
+                const type = this.inferType(value);
+                
+                // Check if variable already declared
+                if (this.variables.has(varName)) {
+                    return '    '.repeat(indent) + `${varName} = ${this.convertValue(value)};`;
+                } else {
+                    this.variables.set(varName, type);
+                    return '    '.repeat(indent) + `${type} ${varName} = ${this.convertValue(value)};`;
+                }
+            }
+
+            convertCondition(line, indent) {
+                if (line === 'else:') {
+                    return '    '.repeat(indent - 1) + '} else {';
+                }
+                
+                if (line.startsWith('elif ')) {
+                    const condition = line.substring(5, line.length - 1);
+                    return '    '.repeat(indent - 1) + `} else if (${this.convertCondition(condition)}) {`;
+                }
+                
+                if (line.startsWith('if ')) {
+                    const condition = line.substring(3, line.length - 1);
+                    return '    '.repeat(indent) + `if (${this.convertExpression(condition)}) {`;
+                }
+                
+                return line;
+            }
+
+            convertForLoop(line, indent) {
+                // for item in list
+                const iterMatch = line.match(/^for\s+(\w+)\s+in\s+(\w+):/);
+                if (iterMatch) {
+                    const [, item, collection] = iterMatch;
+                    // Use String as default type for better compatibility
+                    return '    '.repeat(indent) + `for (String ${item} : ${collection}) {`;
+                }
+                
+                // for i in range(n)
+                const rangeMatch = line.match(/^for\s+(\w+)\s+in\s+range\((\d+)\):/);
+                if (rangeMatch) {
+                    const [, var1, limit] = rangeMatch;
+                    return '    '.repeat(indent) + `for (int ${var1} = 0; ${var1} < ${limit}; ${var1}++) {`;
+                }
+                
+                // for i in range(start, end)
+                const rangeMatch2 = line.match(/^for\s+(\w+)\s+in\s+range\((\d+),\s*(\d+)\):/);
+                if (rangeMatch2) {
+                    const [, var1, start, end] = rangeMatch2;
+                    return '    '.repeat(indent) + `for (int ${var1} = ${start}; ${var1} < ${end}; ${var1}++) {`;
+                }
+                
+                // for i in range(start, end, step)
+                const rangeMatch3 = line.match(/^for\s+(\w+)\s+in\s+range\((\d+),\s*(\d+),\s*(\d+)\):/);
+                if (rangeMatch3) {
+                    const [, var1, start, end, step] = rangeMatch3;
+                    return '    '.repeat(indent) + `for (int ${var1} = ${start}; ${var1} < ${end}; ${var1} += ${step}) {`;
+                }
+                
+                return line;
+            }
+
+            convertWhileLoop(line, indent) {
+                const condition = line.substring(6, line.length - 1);
+                return '    '.repeat(indent) + `while (${this.convertExpression(condition)}) {`;
+            }
+
+            convertReturn(line, indent) {
+                if (line === 'return') {
+                    return '    '.repeat(indent) + 'return;';
+                }
+                
+                const value = line.substring(6).trim();
+                return '    '.repeat(indent) + `return ${this.convertValue(value)};`;
+            }
+
+            convertStatement(line, indent) {
+                // Handle method calls
+                if (line.includes('.append(')) {
+                    const converted = line.replace(/(\w+)\.append\(([^)]+)\)/, '$1.add($2)');
+                    return '    '.repeat(indent) + converted + ';';
+                }
+                
+                // Handle list operations
+                if (line.includes('.remove(')) {
+                    return '    '.repeat(indent) + line + ';';
+                }
+                
+                // Handle function calls
+                if (line.includes('(') && line.includes(')') && !line.includes('=')) {
+                    return '    '.repeat(indent) + line + ';';
+                }
+                
+                // Handle closing braces
+                if (this.shouldCloseBrace(line, indent)) {
+                    return '    '.repeat(indent - 1) + '}';
+                }
+                
+                return '    '.repeat(indent) + line + ';';
+            }
+
+            convertParameters(params, isConstructor = false) {
+                if (!params.trim()) return '';
+                
+                return params.split(',').map(param => {
+                    const trimmed = param.trim();
+                    if (trimmed === 'self') return '';
+                    
+                    // Better type inference for parameters - use String as default for better compatibility
+                    return `String ${trimmed}`;
+                }).filter(p => p).join(', ');
+            }
+
+            convertValue(value) {
+                // Handle lists
+                if (value.startsWith('[') && value.endsWith(']')) {
+                    if (value === '[]') {
+                        this.imports.add('import java.util.ArrayList;');
+                        this.imports.add('import java.util.List;');
+                        return 'new ArrayList<String>()';
+                    } else {
+                        this.imports.add('import java.util.Arrays;');
+                        this.imports.add('import java.util.List;');
+                        const content = value.substring(1, value.length - 1);
+                        return `Arrays.asList(${content})`;
+                    }
+                }
+                
+                // Handle strings - ensure they're properly quoted
+                if ((value.startsWith('"') && value.endsWith('"')) || 
+                    (value.startsWith("'") && value.endsWith("'"))) {
+                    return value.replace(/'/g, '"'); // Convert single quotes to double quotes
+                }
+                
+                // Handle boolean values
+                if (value === 'True') return 'true';
+                if (value === 'False') return 'false';
+                if (value === 'None') return 'null';
+                
+                // Handle power operator - need to import Math
+                if (value.includes('**')) {
+                    const parts = value.split('**');
+                    if (parts.length === 2) {
+                        return `Math.pow(${parts[0].trim()}, ${parts[1].trim()})`;
+                    }
+                }
+                
+                // Handle method calls that need conversion
+                if (value.includes('.append(')) {
+                    value = value.replace(/(\w+)\.append\(([^)]+)\)/, '$1.add($2)');
+                }
+                
+                return value;
+            }
+
+            convertExpression(expr) {
+                // Convert comparison operators
+                expr = expr.replace(/\band\b/g, '&&');
+                expr = expr.replace(/\bor\b/g, '||');
+                expr = expr.replace(/\bnot\b/g, '!');
+                
+                // Convert equality
+                expr = expr.replace(/==/g, '==');
+                expr = expr.replace(/!=/g, '!=');
+                
+                return expr;
+            }
+
+            inferType(value) {
+                if ((value.startsWith('"') && value.endsWith('"')) || 
+                    (value.startsWith("'") && value.endsWith("'"))) {
+                    return 'String';
+                }
+                
+                if (value === 'True' || value === 'False') {
+                    return 'boolean';
+                }
+                
+                if (/^\d+$/.test(value)) {
+                    return 'int';
+                }
+                
+                if (/^\d+\.\d+$/.test(value)) {
+                    return 'double';
+                }
+                
+                if (value.startsWith('[')) {
+                    this.imports.add('import java.util.List;');
+                    this.imports.add('import java.util.ArrayList;');
+                    return 'List<Object>';
+                }
+                
+                return 'Object';
+            }
+
+            inferReturnType(lines, funcStartIndex) {
+                for (let i = funcStartIndex + 1; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (line.startsWith('def ') || line.startsWith('class ')) break;
+                    
+                    if (line.startsWith('return ')) {
+                        const returnValue = line.substring(7).trim();
+                        if (!returnValue || returnValue === 'None') return 'void';
+                        
+                        // Better type inference
+                        if (returnValue.startsWith('"') || returnValue.startsWith("'") || returnValue.includes('f"') || returnValue.includes("f'")) {
+                            return 'String';
+                        }
+                        if (/^\d+$/.test(returnValue)) {
+                            return 'int';
+                        }
+                        if (/^\d+\.\d+$/.test(returnValue)) {
+                            return 'double';
+                        }
+                        if (returnValue === 'True' || returnValue === 'False') {
+                            return 'boolean';
+                        }
+                        if (returnValue.startsWith('[')) {
+                            return 'List<String>';
+                        }
+                        
+                        return 'String'; // Default to String for most cases
+                    }
+                }
+                return 'void';
+            }
+
+            parseParameters(params) {
+                return params.split(',').map(p => p.trim()).filter(p => p && p !== 'self');
+            }
+
+            getCollectionType(collection) {
+                const varType = this.variables.get(collection);
+                if (varType && varType.includes('List')) return 'Object';
+                return 'int'; // Default assumption
+            }
+
+            isAssignment(line) {
+                return /^\w+\s*=\s*[^=]/.test(line) && !line.includes('==') && !line.includes('!=');
+            }
+
+            getIndent(line) {
+                return Math.floor((line.length - line.trimLeft().length) / 4);
+            }
+
+            shouldCloseBrace(line, indent) {
+                // This is a simplified approach - in reality, you'd need more sophisticated brace tracking
+                return false;
+            }
+
+            wrapInClass(javaLines) {
+                let hasClass = javaLines.some(line => line.includes('public class'));
+                let hasMain = javaLines.some(line => line.includes('public static void main'));
+                
+                let result = '';
+                
+                // Add imports
+                if (this.imports.size > 0) {
+                    result += Array.from(this.imports).join('\n') + '\n\n';
+                }
+                
+                if (!hasClass) {
+                    result += 'public class Main {\n';
+                    
+                    if (!hasMain) {
+                        result += '    public static void main(String[] args) {\n';
+                        
+                        // Process each line and add proper indentation and closing braces
+                        let braceCount = 0;
+                        for (let i = 0; i < javaLines.length; i++) {
+                            const line = javaLines[i];
+                            if (line.trim()) {
+                                result += '        ' + line.trim() + '\n';
+                                
+                                // Count braces to add closing braces later
+                                const openBraces = (line.match(/\{/g) || []).length;
+                                const closeBraces = (line.match(/\}/g) || []).length;
+                                braceCount += openBraces - closeBraces;
+                            }
+                        }
+                        
+                        // Add missing closing braces
+                        for (let i = 0; i < braceCount; i++) {
+                            result += '        }\n';
+                        }
+                        
+                        result += '    }\n';
+                    } else {
+                        // If there's already a main method, just add the lines
+                        result += javaLines.join('\n');
+                    }
+                    
+                    result += '}';
+                } else {
+                    // Handle class definitions
+                    let braceCount = 0;
+                    for (const line of javaLines) {
+                        result += line + '\n';
+                        const openBraces = (line.match(/\{/g) || []).length;
+                        const closeBraces = (line.match(/\}/g) || []).length;
+                        braceCount += openBraces - closeBraces;
+                    }
+                    
+                    // Add missing closing braces
+                    for (let i = 0; i < braceCount; i++) {
+                        result += '}';
+                        if (i < braceCount - 1) result += '\n';
+                    }
+                }
+                
+                return result;
+            }
+        }
+
         function loadExample(index) {
             document.getElementById('pythonInput').value = examples[index];
             convertCode();
@@ -351,181 +1390,19 @@ print(f"Your grade is: {grade}")`
             const pythonCode = document.getElementById('pythonInput').value;
             if (!pythonCode.trim()) {
                 showNotification('Please enter some Python code first!', 'error');
+                document.getElementById('javaOutput').textContent = 'Converted Java code will appear here...';
                 return;
             }
 
             try {
-                const javaCode = pythonToJava(pythonCode);
+                const converter = new PythonToJavaConverter();
+                const javaCode = converter.convert(pythonCode);
                 document.getElementById('javaOutput').textContent = javaCode;
                 showNotification('Code converted successfully!', 'success');
             } catch (error) {
-                document.getElementById('javaOutput').textContent = 'Error converting code: ' + error.message;
-                showNotification('Conversion error occurred', 'error');
+                document.getElementById('javaOutput').innerHTML = `<div style="color: #e74c3c; font-weight: bold; margin-bottom: 15px;">❌ Conversion Error</div><div style="color: #2c3e50; line-height: 1.5; white-space: pre-wrap;">${error.message}</div>`;
+                showNotification('Invalid input detected', 'error');
             }
-        }
-
-        function pythonToJava(pythonCode) {
-            let javaCode = pythonCode;
-            let hasMain = false;
-            let imports = new Set();
-            let classNeeded = false;
-
-            // Check if we need Scanner for input
-            if (javaCode.includes('input(')) {
-                imports.add('import java.util.Scanner;');
-            }
-
-            // Check if we need ArrayList
-            if (javaCode.includes('.append(') || javaCode.includes('[]')) {
-                imports.add('import java.util.ArrayList;');
-                imports.add('import java.util.List;');
-            }
-
-            // Convert print statements
-            javaCode = javaCode.replace(/print\(f?['"]([^'"]*)\{([^}]+)\}([^'"]*)['"]\)/g, 'System.out.println("$1" + $2 + "$3")');
-            javaCode = javaCode.replace(/print\(f['"]([^'"]*)['"]\)/g, 'System.out.println("$1")');
-            javaCode = javaCode.replace(/print\(([^)]+)\)/g, 'System.out.println($1)');
-
-            // Convert input
-            javaCode = javaCode.replace(/(\w+)\s*=\s*input\(['"]([^'"]*)['"]\)/g, 'System.out.print("$2"); String $1 = scanner.nextLine()');
-            javaCode = javaCode.replace(/(\w+)\s*=\s*int\(input\(['"]([^'"]*)['"]\)\)/g, 'System.out.print("$2"); int $1 = scanner.nextInt()');
-
-            // Convert function definitions
-            javaCode = javaCode.replace(/def\s+(\w+)\(([^)]*)\):/g, (match, funcName, params) => {
-                if (funcName === '__init__') {
-                    return `public ${getCurrentClassName()}(${convertParams(params)}) {`;
-                }
-                const returnType = inferReturnType(pythonCode, funcName);
-                return `public static ${returnType} ${funcName}(${convertParams(params)}) {`;
-            });
-
-            // Convert class definitions
-            javaCode = javaCode.replace(/class\s+(\w+):/g, (match, className) => {
-                classNeeded = true;
-                return `public class ${className} {`;
-            });
-
-            // Convert self references
-            javaCode = javaCode.replace(/self\.(\w+)/g, 'this.$1');
-            javaCode = javaCode.replace(/self,?\s*/g, '');
-
-            // Convert list operations
-            javaCode = javaCode.replace(/(\w+)\s*=\s*\[\]/g, 'List<Integer> $1 = new ArrayList<>()');
-            javaCode = javaCode.replace(/(\w+)\s*=\s*\[([^\]]+)\]/g, 'List<Integer> $1 = Arrays.asList($2)');
-            javaCode = javaCode.replace(/(\w+)\.append\(([^)]+)\)/g, '$1.add($2)');
-
-            // Convert for loops
-            javaCode = javaCode.replace(/for\s+(\w+)\s+in\s+(\w+):/g, 'for (int $1 : $2) {');
-            javaCode = javaCode.replace(/for\s+(\w+)\s+in\s+range\((\d+)\):/g, 'for (int $1 = 0; $1 < $2; $1++) {');
-            javaCode = javaCode.replace(/for\s+(\w+)\s+in\s+range\((\w+),\s*(\w+)\):/g, 'for (int $1 = $2; $1 < $3; $1++) {');
-
-            // Convert if/elif/else
-            javaCode = javaCode.replace(/elif\s+([^:]+):/g, '} else if ($1) {');
-            javaCode = javaCode.replace(/if\s+([^:]+):/g, 'if ($1) {');
-            javaCode = javaCode.replace(/else:/g, '} else {');
-
-            // Convert return statements
-            javaCode = javaCode.replace(/return\s+/g, 'return ');
-
-            // Convert variable assignments with type inference
-            javaCode = javaCode.replace(/(\w+)\s*=\s*"([^"]*)"/g, 'String $1 = "$2"');
-            javaCode = javaCode.replace(/(\w+)\s*=\s*(\d+\.\d+)/g, 'double $1 = $2');
-            javaCode = javaCode.replace(/(\w+)\s*=\s*(\d+)/g, 'int $1 = $2');
-            javaCode = javaCode.replace(/(\w+)\s*=\s*(True|False)/g, 'boolean $1 = $2.toLowerCase()');
-
-            // Fix indentation and add braces
-            const lines = javaCode.split('\n');
-            const result = [];
-            let indentLevel = 0;
-            let inClass = false;
-
-            for (let i = 0; i < lines.length; i++) {
-                let line = lines[i];
-                const trimmed = line.trim();
-
-                if (!trimmed) {
-                    result.push('');
-                    continue;
-                }
-
-                // Adjust indentation
-                if (trimmed.includes('{')) {
-                    result.push('    '.repeat(indentLevel) + trimmed);
-                    indentLevel++;
-                    if (trimmed.includes('class ')) {
-                        inClass = true;
-                    }
-                } else if (trimmed === '}') {
-                    indentLevel = Math.max(0, indentLevel - 1);
-                    result.push('    '.repeat(indentLevel) + trimmed);
-                } else {
-                    result.push('    '.repeat(indentLevel) + trimmed);
-                }
-            }
-
-            // Add missing closing braces
-            while (indentLevel > 0) {
-                indentLevel--;
-                result.push('    '.repeat(indentLevel) + '}');
-            }
-
-            // Wrap in main method if needed
-            let finalCode = result.join('\n');
-
-            if (!inClass && !finalCode.includes('public class')) {
-                hasMain = true;
-                const mainContent = finalCode.split('\n').map(line => '        ' + line).join('\n');
-                finalCode = `public class Main {
-    public static void main(String[] args) {
-${imports.has('import java.util.Scanner;') ? '        Scanner scanner = new Scanner(System.in);' : ''}
-${mainContent}
-${imports.has('import java.util.Scanner;') ? '        scanner.close();' : ''}
-    }
-}`;
-            }
-
-            // Add imports at the beginning
-            if (imports.size > 0) {
-                finalCode = Array.from(imports).join('\n') + '\n\n' + finalCode;
-            }
-
-            return finalCode;
-        }
-
-        function convertParams(params) {
-            if (!params.trim()) return '';
-
-            return params.split(',').map(param => {
-                const trimmed = param.trim();
-                if (trimmed === 'self') return '';
-                // Simple type inference - in real converter, this would be more sophisticated
-                return `Object ${trimmed}`;
-            }).filter(p => p).join(', ');
-        }
-
-        function inferReturnType(code, funcName) {
-            // Simple return type inference
-            const funcRegex = new RegExp(`def\\s+${funcName}[\\s\\S]*?(?=def|class|$)`, 'i');
-            const funcCode = code.match(funcRegex);
-
-            if (funcCode && funcCode[0].includes('return ')) {
-                if (funcCode[0].includes('return "') || funcCode[0].includes("return '")) {
-                    return 'String';
-                }
-                if (funcCode[0].includes('return \\d+\\.\\d+')) {
-                    return 'double';
-                }
-                if (funcCode[0].includes('return \\d+')) {
-                    return 'int';
-                }
-                return 'Object';
-            }
-            return 'void';
-        }
-
-        function getCurrentClassName() {
-            // This is a simplified approach - would need more context in real implementation
-            return 'MyClass';
         }
 
         function clearAll() {
@@ -540,7 +1417,7 @@ ${imports.has('import java.util.Scanner;') ? '        scanner.close();' : ''}
                 showNotification('No code to copy! Convert some Python code first.', 'error');
                 return;
             }
-
+            
             navigator.clipboard.writeText(output).then(() => {
                 showNotification('Java code copied to clipboard!', 'success');
             }).catch(() => {
@@ -552,7 +1429,7 @@ ${imports.has('import java.util.Scanner;') ? '        scanner.close();' : ''}
             const notification = document.getElementById('notification');
             notification.textContent = message;
             notification.className = 'notification show';
-
+            
             if (type === 'error') {
                 notification.style.background = '#e74c3c';
             } else if (type === 'success') {
@@ -560,19 +1437,13 @@ ${imports.has('import java.util.Scanner;') ? '        scanner.close();' : ''}
             } else {
                 notification.style.background = '#3498db';
             }
-
+            
             setTimeout(() => {
                 notification.classList.remove('show');
             }, 3000);
         }
 
-        // Auto-convert on input (with debounce)
-        let timeout;
-        document.getElementById('pythonInput').addEventListener('input', () => {
-            clearTimeout(timeout);
-            timeout = setTimeout(convertCode, 1000);
-        });
+        // Auto-convert removed - only convert when button is clicked
     </script>
 </body>
-
 </html>
